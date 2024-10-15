@@ -105,7 +105,7 @@ static_assert(sizeof(uint64_t) == 8, "uint8_t is missized");
 
 // Fast path, keep together
 int Verilated::s_debug = 0;
-VerilatedContext* Verilated::s_lastContextp = nullptr;
+std::atomic<VerilatedContext*> Verilated::s_lastContextp{nullptr};
 
 // Keep below together in one cache line
 // Internal note: Globals may multi-construct, see verilated.cpp top.

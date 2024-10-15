@@ -195,7 +195,7 @@ extern uint32_t VL_THREAD_ID() VL_MT_SAFE;
 #endif
 
 /// Mutex, wrapped to allow -fthread_safety checks
-class VL_CAPABILITY("mutex") VerilatedMutex final {
+class VL_CAPABILITY("mutex") VerilatedMutex {
 private:
     std::mutex m_mutex;  // Mutex
 
@@ -781,7 +781,7 @@ class Verilated final {
     // Debug is reloaded from on command-line settings, so do not need to persist
     static int s_debug;  // See accessors... only when VL_DEBUG set
 
-    static VerilatedContext* s_lastContextp;  // Last context constructed/attached
+    static std::atomic<VerilatedContext*> s_lastContextp;  // Last context constructed/attached
 
     // Not covered by mutex, as per-thread
     static thread_local struct ThreadLocal {
@@ -827,8 +827,18 @@ public:
     /// Return the last VerilatedContext accessed
     /// Generally threadContextp() should be called instead
     static VerilatedContext* lastContextp() VL_MT_SAFE {
-        if (!s_lastContextp) lastContextp(defaultContextp());
-        return s_lastContextp;
+        VerilatedContext* contextp = s_lastContextp.load(std::memory_order_acquire);
+        if (!contextp) {
+            contextp = defaultContextp();
+            VerilatedContext* expected = nullptr;
+            if (!s_lastContextp.compare_exchange_strong(expected, contextp, 
+                                                        std::memory_order_acq_rel,
+                                                        std::memory_order_acquire)) {
+                // Another thread beat us to it, use their value
+                contextp = expected;
+            }
+        }
+        return contextp;
     }
     /// Set the VerilatedContext used by the current thread
 
